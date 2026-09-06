@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          String    @default("USER")
+  dob           String?
+  gender        String?
+  height        Float?
+  weight        Float?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patientProfile      PatientProfile?
+  doctorProfile       DoctorProfile?
+  healthReadings      VitalReading[]
+  envReadings         EnvironmentReading[]
+  baseline            HealthBaseline?
+  riskAssessments     RiskAssessment[]
+  alerts              Alert[]
+  notifications       Notification[]
+  devices             Device[]
+  emergencyContacts   EmergencyContact[]
+  emergencyEvents     EmergencyEvent[]
+  doctorAccessGranting DoctorAccess[] @relation("UserAccess")
+  doctorAccessDoctor   DoctorAccess[] @relation("DoctorAccess")
+  clinicalNotesAsDoctor ClinicalNote[] @relation("ClinicalNoteDoctor")
+  clinicalNotesAsPatient ClinicalNote[] @relation("ClinicalNotePatient")
+  recommendations     Recommendation[]
+  systemEvents        SystemEvent[]
+  accessAuditLogs     AccessAuditLog[]
+}
+
+model PatientProfile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id])
+  bloodType String?
+  allergies String?
+  emergencyContactName String?
+  emergencyContactPhone String?
+}
+
+model DoctorProfile {
+  id       String @id @default(uuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id])
+  specialty String?
+  licenseNo String?
+  hospital  String?
+}
+
+model VitalReading {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  heartRate Float
+  spo2      Float
+  temperature Float
+  hydration Float
+  hrv       Float?
+  sleep     Float?
+  activity  Float?
+  source    String   @default("manual")
+}
+
+model EnvironmentReading {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  temperature Float
+  humidity    Float
+  aqi         Float
+  uvIndex     Float?
+  heatIndex   Float
+  windSpeed   Float?
+  source      String   @default("simulation")
+}
+
+model HealthBaseline {
+  id              String @id @default(uuid())
+  userId          String @unique
+  user            User   @relation(fields: [userId], references: [id])
+  heartRateMin    Float  @default(60)
+  heartRateMax    Float  @default(85)
+  spo2Min         Float  @default(95)
+  temperatureMin  Float  @default(36.1)
+  temperatureMax  Float  @default(37.2)
+  hydrationMin    Float  @default(55)
+  hydrationMax    Float  @default(75)
+  hrvMin          Float  @default(30)
+  hrvMax          Float  @default(70)
+  sleepMin        Float  @default(6)
+  sleepMax        Float  @default(9)
+  calculatedAt    DateTime @default(now())
+}
+
+model RiskAssessment {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  timestamp       DateTime @default(now())
+  overallRisk     Float
+  level           String
+  heatStress      Float    @default(0)
+  dehydration     Float    @default(0)
+  respiratory     Float    @default(0)
+  cardiacStrain   Float    @default(0)
+  fatigue         Float    @default(0)
+  explanation     String
+  recommendations String   @default("[]")
+  confidence      Float    @default(0.85)
+}
+
+model Alert {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  level     String
+  category  String
+  title     String
+  message   String
+  status    String   @default("ACTIVE")
+  factors   String   @default("[]")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+}
+
+model Device {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  type       String
+  status     String   @default("connected")
+  lastSync   DateTime @default(now())
+  isSimulation Boolean @default(false)
+}
+
+model EmergencyContact {
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  name      String
+  phone     String
+  relation  String?
+}
+
+model EmergencyEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  trigger   String
+  status    String   @default("TRIGGERED")
+  latitude  Float?
+  longitude Float?
+  notes     String?
+}
+
+model DoctorAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserAccess", fields: [userId], references: [id])
+  doctorId  String
+  doctor    User     @relation("DoctorAccess", fields: [doctorId], references: [id])
+  status    String   @default("ACTIVE")
+  grantedAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  scopes    AccessScope[]
+}
+
+model AccessScope {
+  id             String @id @default(uuid())
+  doctorAccessId String
+  doctorAccess   DoctorAccess @relation(fields: [doctorAccessId], references: [id])
+  permission     String
+}
+
+model AccessAuditLog {
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  doctorId     String
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  action       String
+  dataCategory String?
+  details      String?
+}
+
+model ClinicalNote {
+  id          String   @id @default(uuid())
+  doctorId    String
+  doctor      User     @relation("ClinicalNoteDoctor", fields: [doctorId], references: [id])
+  userId      String
+  user        User     @relation("ClinicalNotePatient", fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  observation String
+  assessment  String
+  followUp    String?
+}
+
+model Recommendation {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
+  category  String
+  title     String
+  message   String
+  priority  String   @default("MEDIUM")
+}
+
+model SystemEvent {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  type      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  details   String?
+}
