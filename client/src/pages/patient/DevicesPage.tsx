@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { devicesAPI } from '../../services/api';
+import { devicesAPI, healthAPI } from '../../services/api';
 import { SmartWatchSVG } from '../../components/SmartWatchSVG';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { EmptyState } from '../../components/EmptyState';
 import { Wifi, WifiOff, RefreshCw, Plus, X, Battery, BatteryLow, Trash2, PlugZap, Clock, Activity, Shield, ChevronRight, Zap, Heart, Wind, Thermometer, Droplets } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Device } from '../../types';
 
 function getStatusLabel(status: string) {
@@ -79,6 +79,12 @@ export function DevicesPage() {
     refetchInterval: 5000,
   });
 
+  const { data: currentVitals } = useQuery({
+    queryKey: ['health-current'],
+    queryFn: () => healthAPI.getCurrent().then(r => r.data.reading),
+    refetchInterval: 10000,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: { name: string; type: string; manufacturer?: string; model?: string; isSimulation?: boolean }) =>
       devicesAPI.create(data),
@@ -122,6 +128,24 @@ export function DevicesPage() {
       setSelectedDevice(null);
     },
   });
+
+  const { data: liveVitals } = useQuery({
+    queryKey: ['health-current'],
+    queryFn: () => healthAPI.getCurrent().then(r => r.data.reading),
+    refetchInterval: (query) => {
+      if (selectedDevice && selectedDevice.status === 'CONNECTED') return 5000;
+      return false;
+    },
+    enabled: !!selectedDevice && selectedDevice.status === 'CONNECTED',
+  });
+
+  const isDataFresh = useMemo(() => {
+    if (!liveVitals?.timestamp) return false;
+    const age = Date.now() - new Date(liveVitals.timestamp).getTime();
+    return age < 120000;
+  }, [liveVitals]);
+
+  const watchConnected = selectedDevice?.status === 'CONNECTED' && isDataFresh;
 
   return (
     <div className="space-y-6">
@@ -231,12 +255,27 @@ export function DevicesPage() {
                 </button>
               </div>
 
-              {/* Watch Visual */}
+              {/* Live Watch Visual */}
               <div className="flex flex-col items-center mb-6">
-                <SmartWatchSVG connected={selectedDevice.status === 'CONNECTED'} syncing={selectedDevice.status === 'SYNCING'} className="w-32 h-44" />
+                <div className={`rounded-2xl p-4 ${
+                  watchConnected ? 'bg-gradient-to-br from-slate-900 to-slate-800' :
+                  selectedDevice.status === 'SYNCING' ? 'bg-gradient-to-br from-amber-900 to-amber-800' :
+                  'bg-gradient-to-br from-slate-700 to-slate-600'
+                }`}>
+                  <SmartWatchSVG
+                    connected={watchConnected}
+                    syncing={selectedDevice.status === 'SYNCING'}
+                    heartRate={liveVitals?.heartRate}
+                    spo2={liveVitals?.spo2}
+                    temperature={liveVitals?.bodyTemperature}
+                    steps={liveVitals?.steps}
+                    battery={selectedDevice.battery}
+                    className="w-40 h-56"
+                  />
+                </div>
                 <div className="mt-3 text-center">
                   <h4 className="font-bold text-slate-900 text-lg">{selectedDevice.name}</h4>
-                  <p className="text-sm text-slate-500">{selectedDevice.type.replace(/_/g, ' ')}{selectedDevice.manufacturer ? ` - ${selectedDevice.manufacturer}` : ''}</p>
+                  <p className="text-sm text-slate-500">{selectedDevice.type.replace(/_/g, ' ')}{selectedDevice.manufacturer ? ` · ${selectedDevice.manufacturer}` : ''}</p>
                 </div>
               </div>
 
@@ -247,6 +286,12 @@ export function DevicesPage() {
                   <span className={`text-sm font-semibold ${getStatusTextColor(selectedDevice.status)}`}>
                     {getStatusLabel(selectedDevice.status)}
                   </span>
+                  {selectedDevice.status === 'CONNECTED' && isDataFresh && (
+                    <span className="text-xs text-green-600 font-medium ml-auto">Data Fresh</span>
+                  )}
+                  {selectedDevice.status === 'CONNECTED' && !isDataFresh && (
+                    <span className="text-xs text-amber-600 font-medium ml-auto">Data Stale</span>
+                  )}
                 </div>
               </div>
 
@@ -257,6 +302,7 @@ export function DevicesPage() {
                   <div className="flex items-center gap-1.5 mt-1">
                     {getBatteryIcon(selectedDevice.battery)}
                     <span className="text-sm font-semibold text-slate-900">{selectedDevice.battery}%</span>
+                    {selectedDevice.battery <= 20 && <span className="text-xs text-red-600 font-medium">LOW</span>}
                   </div>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3">
@@ -268,8 +314,10 @@ export function DevicesPage() {
                   <p className="text-sm font-semibold text-slate-900 mt-1">{selectedDevice.provider}</p>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="text-xs text-slate-500">Model</p>
-                  <p className="text-sm font-semibold text-slate-900 mt-1">{selectedDevice.model || 'N/A'}</p>
+                  <p className="text-xs text-slate-500">Data Quality</p>
+                  <p className={`text-sm font-semibold mt-1 ${watchConnected ? 'text-green-600' : isDataFresh ? 'text-amber-600' : 'text-slate-400'}`}>
+                    {watchConnected ? 'GOOD' : isDataFresh ? 'LIMITED' : 'STALE'}
+                  </p>
                 </div>
               </div>
 
@@ -360,7 +408,15 @@ export function DevicesPage() {
                     isSyncing ? 'bg-gradient-to-br from-amber-50 to-orange-50' :
                     'bg-gradient-to-br from-slate-50 to-slate-100'
                   }`}>
-                    <SmartWatchSVG connected={isConnected} syncing={isSyncing} className="w-28 h-40" />
+                    <SmartWatchSVG
+                      connected={isConnected}
+                      syncing={isSyncing}
+                      heartRate={isConnected ? currentVitals?.heartRate : undefined}
+                      spo2={isConnected ? currentVitals?.spo2 : undefined}
+                      temperature={isConnected ? currentVitals?.bodyTemperature : undefined}
+                      battery={device.battery}
+                      className="w-28 h-40"
+                    />
                   </div>
 
                   {/* Device Info Section */}
@@ -451,7 +507,15 @@ export function DevicesPage() {
                     isSyncing ? 'bg-gradient-to-br from-amber-50 to-orange-50' :
                     'bg-gradient-to-br from-slate-50 to-slate-100'
                   }`}>
-                    <SmartWatchSVG connected={isConnected} syncing={isSyncing} className="w-24 h-34" />
+                    <SmartWatchSVG
+                      connected={isConnected}
+                      syncing={isSyncing}
+                      heartRate={isConnected ? currentVitals?.heartRate : undefined}
+                      spo2={isConnected ? currentVitals?.spo2 : undefined}
+                      temperature={isConnected ? currentVitals?.bodyTemperature : undefined}
+                      battery={device.battery}
+                      className="w-24 h-34"
+                    />
                   </div>
                   <div className="p-4">
                     <div className="text-center mb-3">
