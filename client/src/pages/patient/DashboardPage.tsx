@@ -5,9 +5,9 @@ import { RiskBadge } from '../../components/RiskBadge';
 import { AlertCard } from '../../components/AlertCard';
 import { HealthScoreGauge } from '../../components/HealthScoreGauge';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
-import { Heart, Thermometer, Droplets, Moon, Activity, Wind, CloudSun, AlertTriangle, Play, Share2 } from 'lucide-react';
+import { Heart, Thermometer, Droplets, Moon, Activity, Wind, CloudSun, AlertTriangle, Play, Share2, Footprints, Brain } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
+import { formatSleepDuration, formatSteps } from '../../types';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -15,6 +15,12 @@ export function DashboardPage() {
   const { data: vitals, isLoading: vitalsLoading } = useQuery({
     queryKey: ['health-current'],
     queryFn: () => healthAPI.getCurrent().then(r => r.data.reading),
+    refetchInterval: 30000,
+  });
+
+  const { data: healthScoreData, isLoading: scoreLoading } = useQuery({
+    queryKey: ['health-score'],
+    queryFn: () => healthAPI.getHealthScore().then(r => r.data.healthScore),
     refetchInterval: 30000,
   });
 
@@ -34,12 +40,23 @@ export function DashboardPage() {
     queryFn: () => environmentAPI.getCurrent().then(r => r.data.reading),
   });
 
-  const healthScore = risk ? Math.round((1 - risk.overallRisk) * 100) : 75;
+  const healthScore = healthScoreData?.score ?? 0;
+  const riskLevel = healthScoreData?.riskLevel ?? 'LOW';
+  const dataQuality = healthScoreData?.dataQuality ?? 'LIMITED';
   const activeAlerts = alerts?.filter(a => a.status === 'active') || [];
+
+  const formatTimeSince = (timestamp: string) => {
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Welcome Back</h2>
@@ -63,19 +80,22 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Health Score + Risk */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center justify-center">
-          {riskLoading ? (
+          {scoreLoading ? (
             <LoadingSkeleton lines={2} className="w-full" />
           ) : (
             <>
               <HealthScoreGauge score={healthScore} size={180} />
-              {risk && (
-                <div className="mt-4">
-                  <RiskBadge level={risk.level} size="lg" />
-                </div>
-              )}
+              <div className="mt-4 text-center">
+                <RiskBadge level={riskLevel} size="lg" />
+                <p className="text-xs text-slate-500 mt-2">
+                  Data Quality: <span className={`font-medium ${dataQuality === 'GOOD' ? 'text-green-600' : dataQuality === 'LIMITED' ? 'text-amber-600' : 'text-red-600'}`}>{dataQuality}</span>
+                </p>
+                {vitals && (
+                  <p className="text-xs text-slate-400 mt-1">Updated {formatTimeSince(vitals.timestamp)}</p>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -86,12 +106,12 @@ export function DashboardPage() {
             <LoadingSkeleton lines={4} />
           ) : vitals ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard title="Heart Rate" value={vitals.heartRate} unit="bpm" color="red" icon={<Heart className="w-4 h-4" />} />
-              <MetricCard title="SpO2" value={vitals.spo2} unit="%" color="blue" icon={<Wind className="w-4 h-4" />} />
-              <MetricCard title="Temperature" value={vitals.temperature} unit="°C" color="amber" icon={<Thermometer className="w-4 h-4" />} />
-              <MetricCard title="Hydration" value={vitals.hydration} unit="%" color="teal" icon={<Droplets className="w-4 h-4" />} />
-              <MetricCard title="Sleep" value={vitals.sleep || 7} unit="hrs" color="purple" icon={<Moon className="w-4 h-4" />} />
-              <MetricCard title="Activity" value={vitals.activity || 8500} unit="steps" color="green" icon={<Activity className="w-4 h-4" />} />
+              <MetricCard title="Heart Rate" value={Math.round(vitals.heartRate)} unit="bpm" color="red" icon={<Heart className="w-4 h-4" />} />
+              <MetricCard title="Blood Oxygen" value={Math.round(vitals.spo2)} unit="%" color="blue" icon={<Wind className="w-4 h-4" />} />
+              <MetricCard title="Body Temperature" value={vitals.bodyTemperature.toFixed(1)} unit="°C" color="amber" icon={<Thermometer className="w-4 h-4" />} />
+              <MetricCard title="Hydration Estimate" value={Math.round(vitals.hydration)} unit="%" color="teal" icon={<Droplets className="w-4 h-4" />} />
+              <MetricCard title="Sleep" value={formatSleepDuration(vitals.sleepMinutes || 0)} unit="" color="purple" icon={<Moon className="w-4 h-4" />} />
+              <MetricCard title="Steps" value={formatSteps(vitals.steps)} unit="" color="green" icon={<Footprints className="w-4 h-4" />} />
             </div>
           ) : (
             <p className="text-slate-500 text-sm">No vital data available. Run a simulation to generate data.</p>
@@ -99,30 +119,32 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Environment + Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Environment */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <CloudSun className="w-5 h-5 text-amber-500" />
             Environment
           </h3>
           {environment ? (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="text-center p-3 bg-slate-50 rounded-xl">
                 <p className="text-xs text-slate-500">AQI</p>
-                <p className="text-xl font-bold text-slate-900">{environment.aqi}</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(environment.aqi)}</p>
                 <p className={`text-xs font-medium ${environment.aqi <= 50 ? 'text-green-600' : environment.aqi <= 100 ? 'text-amber-600' : 'text-red-600'}`}>
                   {environment.aqi <= 50 ? 'Good' : environment.aqi <= 100 ? 'Moderate' : 'Unhealthy'}
                 </p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded-xl">
-                <p className="text-xs text-slate-500">Heat Index</p>
-                <p className="text-xl font-bold text-slate-900">{environment.heatIndex}°</p>
+                <p className="text-xs text-slate-500">Env Temperature</p>
+                <p className="text-xl font-bold text-slate-900">{environment.environmentalTemperature.toFixed(1)}°C</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded-xl">
-                <p className="text-xs text-slate-500">Temperature</p>
-                <p className="text-xl font-bold text-slate-900">{environment.temperature}°C</p>
+                <p className="text-xs text-slate-500">Heat Index</p>
+                <p className="text-xl font-bold text-slate-900">{environment.heatIndex.toFixed(1)}°C</p>
+              </div>
+              <div className="text-center p-3 bg-slate-50 rounded-xl">
+                <p className="text-xs text-slate-500">Humidity</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(environment.humidity)}%</p>
               </div>
             </div>
           ) : (
@@ -130,13 +152,15 @@ export function DashboardPage() {
           )}
           <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            SIMULATED DATA - For demonstration purposes
+            SIMULATED DATA - For demonstration purposes only
           </p>
         </div>
 
-        {/* AI Summary */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">AI Health Summary</h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-purple-500" />
+            AI Health Summary
+          </h3>
           {risk ? (
             <div>
               <p className="text-sm text-slate-600 mb-3">{risk.explanation}</p>
@@ -154,12 +178,11 @@ export function DashboardPage() {
               )}
             </div>
           ) : (
-            <p className="text-slate-500 text-sm">No AI analysis available</p>
+            <p className="text-slate-500 text-sm">No AI analysis available. Run a simulation or connect a device.</p>
           )}
         </div>
       </div>
 
-      {/* Recent Alerts */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-900">Recent Alerts</h3>

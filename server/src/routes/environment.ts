@@ -12,7 +12,7 @@ router.get('/current', async (req: AuthRequest, res: Response) => {
 
     const reading = await prisma.environmentReading.findFirst({
       where: { userId: req.user.id },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     if (!reading) {
@@ -42,7 +42,7 @@ router.get('/history', async (req: AuthRequest, res: Response) => {
     const readings = await prisma.environmentReading.findMany({
       where,
       orderBy: { timestamp: 'desc' },
-      take: limit ? parseInt(limit as string) : 100
+      take: limit ? parseInt(limit as string) : 100,
     });
 
     res.json({ readings });

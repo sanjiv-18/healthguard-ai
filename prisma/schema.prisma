@@ -26,6 +26,7 @@ model User {
   envReadings         EnvironmentReading[]
   baseline            HealthBaseline?
   riskAssessments     RiskAssessment[]
+  healthScores        HealthScore[]
   alerts              Alert[]
   notifications       Notification[]
   devices             Device[]
@@ -63,15 +64,23 @@ model VitalReading {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+  deviceId  String?
   timestamp DateTime @default(now())
   heartRate Float
   spo2      Float
-  temperature Float
+  bodyTemperature Float
   hydration Float
   hrv       Float?
-  sleep     Float?
-  activity  Float?
+  sleepMinutes Int?
+  steps     Int      @default(0)
+  stressPercent Float?
+  respiratoryRate Float?
+  calories  Float?
   source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([deviceId])
 }
 
 model EnvironmentReading {
@@ -79,13 +88,17 @@ model EnvironmentReading {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   timestamp DateTime @default(now())
-  temperature Float
+  environmentalTemperature Float
   humidity    Float
   aqi         Float
   uvIndex     Float?
   heatIndex   Float
   windSpeed   Float?
+  weatherCondition String?
   source      String   @default("simulation")
+  createdAt   DateTime @default(now())
+
+  @@index([userId, timestamp])
 }
 
 model HealthBaseline {
@@ -101,9 +114,34 @@ model HealthBaseline {
   hydrationMax    Float  @default(75)
   hrvMin          Float  @default(30)
   hrvMax          Float  @default(70)
-  sleepMin        Float  @default(6)
-  sleepMax        Float  @default(9)
+  sleepMinMinutes Int    @default(360)
+  sleepMaxMinutes Int    @default(540)
+  stepsMin        Int    @default(5000)
+  stepsMax        Int    @default(10000)
   calculatedAt    DateTime @default(now())
+}
+
+model HealthScore {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  timestamp       DateTime @default(now())
+  score           Float
+  riskLevel       String
+  heartRateScore  Float    @default(0)
+  spo2Score       Float    @default(0)
+  temperatureScore Float   @default(0)
+  hydrationScore  Float    @default(0)
+  sleepScore      Float    @default(0)
+  activityScore   Float    @default(0)
+  stressScore     Float    @default(0)
+  respiratoryScore Float   @default(0)
+  environmentScore Float   @default(0)
+  dataQuality     String   @default("GOOD")
+  reasons         String   @default("[]")
+  createdAt       DateTime @default(now())
+
+  @@index([userId, timestamp])
 }
 
 model RiskAssessment {
@@ -121,6 +159,8 @@ model RiskAssessment {
   explanation     String
   recommendations String   @default("[]")
   confidence      Float    @default(0.85)
+
+  @@index([userId, timestamp])
 }
 
 model Alert {
@@ -134,6 +174,8 @@ model Alert {
   message   String
   status    String   @default("ACTIVE")
   factors   String   @default("[]")
+
+  @@index([userId, timestamp])
 }
 
 model Notification {
@@ -148,14 +190,25 @@ model Notification {
 }
 
 model Device {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  name       String
-  type       String
-  status     String   @default("connected")
-  lastSync   DateTime @default(now())
-  isSimulation Boolean @default(false)
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  name          String
+  type          String
+  manufacturer  String?
+  model         String?
+  provider      String   @default("SIMULATED")
+  status        String   @default("CONNECTED")
+  battery       Int      @default(100)
+  lastSync      DateTime @default(now())
+  connectedAt   DateTime @default(now())
+  disconnectedAt DateTime?
+  isSimulation  Boolean  @default(false)
+  metadata      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model EmergencyContact {

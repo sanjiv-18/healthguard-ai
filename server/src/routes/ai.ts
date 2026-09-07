@@ -4,6 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { calculateRisk, RiskInput } from '../services/riskEngine';
 import { generateRecommendations } from '../services/recommendationEngine';
 import { getBaseline } from '../services/baselineEngine';
+import { calculateHealthScore } from '../services/healthScoreEngine';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/risk', async (req: AuthRequest, res: Response) => {
 
     const risk = await prisma.riskAssessment.findFirst({
       where: { userId: req.user.id },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     if (!risk) {
@@ -26,7 +27,7 @@ router.get('/risk', async (req: AuthRequest, res: Response) => {
     res.json({
       risk: {
         ...risk,
-        recommendations: JSON.parse(risk.recommendations)
+        recommendations: JSON.parse(risk.recommendations),
       }
     });
   } catch (error) {
@@ -40,12 +41,12 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
 
     const vital = await prisma.vitalReading.findFirst({
       where: { userId: req.user.id },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     const env = await prisma.environmentReading.findFirst({
       where: { userId: req.user.id },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
 
     const baseline = await getBaseline(req.user.id);
@@ -53,16 +54,16 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
     const input: RiskInput = {
       heartRate: vital?.heartRate ?? 70,
       spo2: vital?.spo2 ?? 97,
-      temperature: vital?.temperature ?? 36.6,
+      temperature: vital?.bodyTemperature ?? 36.6,
       hydration: vital?.hydration ?? 65,
       hrv: vital?.hrv ?? undefined,
-      sleep: vital?.sleep ?? undefined,
-      activity: vital?.activity ?? undefined,
-      envTemp: env?.temperature ?? undefined,
+      sleep: vital?.sleepMinutes !== undefined ? vital.sleepMinutes / 60 : undefined,
+      activity: vital?.steps,
+      envTemp: env?.environmentalTemperature ?? undefined,
       humidity: env?.humidity ?? undefined,
       aqi: env?.aqi ?? undefined,
       heatIndex: env?.heatIndex ?? undefined,
-      baseline
+      baseline,
     };
 
     const riskResult = calculateRisk(input);
@@ -79,7 +80,43 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
         fatigue: riskResult.fatigue,
         explanation: riskResult.explanation,
         recommendations: JSON.stringify(riskResult.recommendations),
-        confidence: riskResult.confidence
+        confidence: riskResult.confidence,
+      }
+    });
+
+    const healthScoreResult = calculateHealthScore({
+      heartRate: vital?.heartRate,
+      spo2: vital?.spo2,
+      bodyTemperature: vital?.bodyTemperature,
+      hydration: vital?.hydration,
+      sleepMinutes: vital?.sleepMinutes ?? undefined,
+      steps: vital?.steps,
+      hrv: vital?.hrv ?? undefined,
+      stressPercent: vital?.stressPercent ?? undefined,
+      respiratoryRate: vital?.respiratoryRate ?? undefined,
+      envTemperature: env?.environmentalTemperature,
+      humidity: env?.humidity,
+      aqi: env?.aqi,
+      heatIndex: env?.heatIndex,
+      baseline,
+    });
+
+    await prisma.healthScore.create({
+      data: {
+        userId: req.user.id,
+        score: healthScoreResult.score,
+        riskLevel: healthScoreResult.riskLevel,
+        heartRateScore: healthScoreResult.components.heartRate,
+        spo2Score: healthScoreResult.components.spo2,
+        temperatureScore: healthScoreResult.components.temperature,
+        hydrationScore: healthScoreResult.components.hydration,
+        sleepScore: healthScoreResult.components.sleep,
+        activityScore: healthScoreResult.components.activity,
+        stressScore: healthScoreResult.components.stress,
+        respiratoryScore: healthScoreResult.components.respiratory,
+        environmentScore: healthScoreResult.components.environment,
+        dataQuality: healthScoreResult.dataQuality,
+        reasons: JSON.stringify(healthScoreResult.reasons),
       }
     });
 
@@ -96,7 +133,7 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
       humidity: input.humidity,
       aqi: input.aqi,
       heatIndex: input.heatIndex,
-      risk: riskResult
+      risk: riskResult,
     });
 
     if (riskResult.level === 'HIGH' || riskResult.level === 'CRITICAL') {
@@ -107,7 +144,7 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
           category: 'HEALTH',
           title: `${riskResult.level} Health Risk Detected`,
           message: riskResult.explanation,
-          factors: JSON.stringify(riskResult.recommendations.slice(0, 3))
+          factors: JSON.stringify(riskResult.recommendations.slice(0, 3)),
         }
       });
 
@@ -116,7 +153,7 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
           userId: req.user.id,
           type: 'HEALTH',
           title: `Health Risk: ${riskResult.level}`,
-          message: `Your overall health risk is ${riskResult.level} (${riskResult.overallRisk}/100).`
+          message: `Your overall health risk is ${riskResult.level} (${riskResult.overallRisk}/100).`,
         }
       });
     }
@@ -125,14 +162,14 @@ router.post('/analyze', async (req: AuthRequest, res: Response) => {
       data: {
         type: 'RISK_ANALYSIS',
         userId: req.user.id,
-        details: `Risk assessed: ${riskResult.level} (${riskResult.overallRisk}/100)`
+        details: `Risk assessed: ${riskResult.level} (${riskResult.overallRisk}/100)`,
       }
     });
 
     res.json({
       risk: {
         ...riskAssessment,
-        recommendations: JSON.parse(riskAssessment.recommendations)
+        recommendations: JSON.parse(riskAssessment.recommendations),
       }
     });
   } catch (error) {

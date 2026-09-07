@@ -12,8 +12,10 @@ interface BaselineResult {
   hydrationMax: number;
   hrvMin: number;
   hrvMax: number;
-  sleepMin: number;
-  sleepMax: number;
+  sleepMinMinutes: number;
+  sleepMaxMinutes: number;
+  stepsMin: number;
+  stepsMax: number;
 }
 
 function percentile(arr: number[], p: number): number {
@@ -33,9 +35,9 @@ export async function calculateBaseline(userId: string): Promise<BaselineResult>
   const readings = await prisma.vitalReading.findMany({
     where: {
       userId,
-      timestamp: { gte: thirtyDaysAgo }
+      timestamp: { gte: thirtyDaysAgo },
     },
-    orderBy: { timestamp: 'desc' }
+    orderBy: { timestamp: 'desc' },
   });
 
   if (readings.length < 5) {
@@ -45,16 +47,18 @@ export async function calculateBaseline(userId: string): Promise<BaselineResult>
       temperatureMin: 36.1, temperatureMax: 37.2,
       hydrationMin: 55, hydrationMax: 75,
       hrvMin: 30, hrvMax: 70,
-      sleepMin: 6, sleepMax: 9
+      sleepMinMinutes: 360, sleepMaxMinutes: 540,
+      stepsMin: 5000, stepsMax: 10000,
     };
   }
 
   const hrValues = readings.map(r => r.heartRate);
   const spo2Values = readings.map(r => r.spo2);
-  const tempValues = readings.map(r => r.temperature);
+  const tempValues = readings.map(r => r.bodyTemperature);
   const hydValues = readings.map(r => r.hydration);
   const hrvValues = readings.filter(r => r.hrv !== null).map(r => r.hrv!);
-  const sleepValues = readings.filter(r => r.sleep !== null).map(r => r.sleep!);
+  const sleepValues = readings.filter(r => r.sleepMinutes !== null).map(r => r.sleepMinutes!);
+  const stepsValues = readings.filter(r => r.steps !== null).map(r => r.steps!);
 
   const result: BaselineResult = {
     heartRateMin: Math.round(percentile(hrValues, 10)),
@@ -66,14 +70,16 @@ export async function calculateBaseline(userId: string): Promise<BaselineResult>
     hydrationMax: Math.round(percentile(hydValues, 90)),
     hrvMin: hrvValues.length > 0 ? Math.round(percentile(hrvValues, 10)) : 30,
     hrvMax: hrvValues.length > 0 ? Math.round(percentile(hrvValues, 90)) : 70,
-    sleepMin: sleepValues.length > 0 ? Math.round(percentile(sleepValues, 10) * 10) / 10 : 6,
-    sleepMax: sleepValues.length > 0 ? Math.round(percentile(sleepValues, 90) * 10) / 10 : 9
+    sleepMinMinutes: sleepValues.length > 0 ? Math.round(percentile(sleepValues, 10)) : 360,
+    sleepMaxMinutes: sleepValues.length > 0 ? Math.round(percentile(sleepValues, 90)) : 540,
+    stepsMin: stepsValues.length > 0 ? Math.round(percentile(stepsValues, 10)) : 5000,
+    stepsMax: stepsValues.length > 0 ? Math.round(percentile(stepsValues, 90)) : 10000,
   };
 
   await prisma.healthBaseline.upsert({
     where: { userId },
     create: { userId, ...result },
-    update: { ...result, calculatedAt: new Date() }
+    update: { ...result, calculatedAt: new Date() },
   });
 
   return result;
@@ -92,8 +98,10 @@ export async function getBaseline(userId: string): Promise<BaselineResult> {
       hydrationMax: existing.hydrationMax,
       hrvMin: existing.hrvMin,
       hrvMax: existing.hrvMax,
-      sleepMin: existing.sleepMin,
-      sleepMax: existing.sleepMax
+      sleepMinMinutes: existing.sleepMinMinutes,
+      sleepMaxMinutes: existing.sleepMaxMinutes,
+      stepsMin: existing.stepsMin,
+      stepsMax: existing.stepsMax,
     };
   }
   return calculateBaseline(userId);

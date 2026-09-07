@@ -44,7 +44,7 @@ export function MyHealthPage() {
     [vitals]
   );
   const tempData = useMemo(() =>
-    (vitals || []).map(v => ({ timestamp: v.timestamp, value: v.temperature })).reverse(),
+    (vitals || []).map(v => ({ timestamp: v.timestamp, value: v.bodyTemperature })).reverse(),
     [vitals]
   );
   const hydrationData = useMemo(() =>
@@ -62,27 +62,24 @@ export function MyHealthPage() {
         <DateRangeSelector value={dateRange} onChange={setDateRange} />
       </div>
 
-      {/* Current Vitals */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MetricCard title="Heart Rate" value={current?.heartRate || '--'} unit="bpm" color="red" icon={<Heart className="w-4 h-4" />} />
-        <MetricCard title="SpO2" value={current?.spo2 || '--'} unit="%" color="blue" icon={<Wind className="w-4 h-4" />} />
-        <MetricCard title="Temperature" value={current?.temperature || '--'} unit="°C" color="amber" icon={<Thermometer className="w-4 h-4" />} />
-        <MetricCard title="Hydration" value={current?.hydration || '--'} unit="%" color="teal" icon={<Droplets className="w-4 h-4" />} />
+        <MetricCard title="Heart Rate" value={current ? Math.round(current.heartRate) : '--'} unit="bpm" color="red" icon={<Heart className="w-4 h-4" />} />
+        <MetricCard title="Blood Oxygen" value={current ? Math.round(current.spo2) : '--'} unit="%" color="blue" icon={<Wind className="w-4 h-4" />} />
+        <MetricCard title="Body Temperature" value={current ? current.bodyTemperature.toFixed(1) : '--'} unit="°C" color="amber" icon={<Thermometer className="w-4 h-4" />} />
+        <MetricCard title="Hydration Estimate" value={current ? Math.round(current.hydration) : '--'} unit="%" color="teal" icon={<Droplets className="w-4 h-4" />} />
       </div>
 
-      {/* Charts */}
       {isLoading ? (
         <LoadingSkeleton lines={6} />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <TelemetryChart data={hrData} title="Heart Rate" unit="bpm" color="#ef4444" baseline={baseline?.avgHeartRate} />
-          <TelemetryChart data={spo2Data} title="SpO2" unit="%" color="#3b82f6" baseline={baseline?.avgSpo2} />
-          <TelemetryChart data={tempData} title="Temperature" unit="°C" color="#f59e0b" baseline={baseline?.avgTemperature} />
-          <TelemetryChart data={hydrationData} title="Hydration" unit="%" color="#0d9488" baseline={baseline?.avgHydration} />
+          <TelemetryChart data={hrData} title="Heart Rate" unit="bpm" color="#ef4444" baseline={baseline?.heartRateMin && baseline?.heartRateMax ? (baseline.heartRateMin + baseline.heartRateMax) / 2 : undefined} />
+          <TelemetryChart data={spo2Data} title="Blood Oxygen" unit="%" color="#3b82f6" baseline={baseline?.spo2Min} />
+          <TelemetryChart data={tempData} title="Body Temperature" unit="°C" color="#f59e0b" baseline={baseline?.temperatureMin && baseline?.temperatureMax ? (baseline.temperatureMin + baseline.temperatureMax) / 2 : undefined} />
+          <TelemetryChart data={hydrationData} title="Hydration Estimate" unit="%" color="#0d9488" baseline={baseline?.hydrationMin && baseline?.hydrationMax ? (baseline.hydrationMin + baseline.hydrationMax) / 2 : undefined} />
         </div>
       )}
 
-      {/* Baseline Comparison */}
       {baseline && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Personal Baseline</h3>
@@ -91,7 +88,7 @@ export function MyHealthPage() {
               <thead>
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-2 text-slate-500 font-medium">Metric</th>
-                  <th className="text-left py-2 text-slate-500 font-medium">Baseline</th>
+                  <th className="text-left py-2 text-slate-500 font-medium">Baseline Range</th>
                   <th className="text-left py-2 text-slate-500 font-medium">Current</th>
                   <th className="text-left py-2 text-slate-500 font-medium">Status</th>
                 </tr>
@@ -99,49 +96,49 @@ export function MyHealthPage() {
               <tbody>
                 <tr className="border-b border-slate-100">
                   <td className="py-2 text-slate-700">Heart Rate</td>
-                  <td className="py-2 text-slate-700">{baseline.avgHeartRate} bpm</td>
-                  <td className="py-2 text-slate-700">{current?.heartRate || '--'} bpm</td>
+                  <td className="py-2 text-slate-700">{baseline.heartRateMin}-{baseline.heartRateMax} bpm</td>
+                  <td className="py-2 text-slate-700">{current ? Math.round(current.heartRate) : '--'} bpm</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      current && Math.abs(current.heartRate - baseline.avgHeartRate) < 10 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      current && current.heartRate >= baseline.heartRateMin && current.heartRate <= baseline.heartRateMax ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {current && Math.abs(current.heartRate - baseline.avgHeartRate) < 10 ? 'Normal' : 'Elevated'}
+                      {current && current.heartRate >= baseline.heartRateMin && current.heartRate <= baseline.heartRateMax ? 'Normal' : 'Outside Range'}
                     </span>
                   </td>
                 </tr>
                 <tr className="border-b border-slate-100">
-                  <td className="py-2 text-slate-700">SpO2</td>
-                  <td className="py-2 text-slate-700">{baseline.avgSpo2}%</td>
-                  <td className="py-2 text-slate-700">{current?.spo2 || '--'}%</td>
+                  <td className="py-2 text-slate-700">Blood Oxygen</td>
+                  <td className="py-2 text-slate-700">&ge;{baseline.spo2Min}%</td>
+                  <td className="py-2 text-slate-700">{current ? Math.round(current.spo2) : '--'}%</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      current && current.spo2 >= 95 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      current && current.spo2 >= baseline.spo2Min ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {current && current.spo2 >= 95 ? 'Normal' : 'Low'}
+                      {current && current.spo2 >= baseline.spo2Min ? 'Normal' : 'Low'}
                     </span>
                   </td>
                 </tr>
                 <tr className="border-b border-slate-100">
-                  <td className="py-2 text-slate-700">Temperature</td>
-                  <td className="py-2 text-slate-700">{baseline.avgTemperature}°C</td>
-                  <td className="py-2 text-slate-700">{current?.temperature || '--'}°C</td>
+                  <td className="py-2 text-slate-700">Body Temperature</td>
+                  <td className="py-2 text-slate-700">{baseline.temperatureMin}-{baseline.temperatureMax}°C</td>
+                  <td className="py-2 text-slate-700">{current ? current.bodyTemperature.toFixed(1) : '--'}°C</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      current && current.temperature >= 36.1 && current.temperature <= 37.2 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      current && current.bodyTemperature >= baseline.temperatureMin && current.bodyTemperature <= baseline.temperatureMax ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {current && current.temperature >= 36.1 && current.temperature <= 37.2 ? 'Normal' : 'Elevated'}
+                      {current && current.bodyTemperature >= baseline.temperatureMin && current.bodyTemperature <= baseline.temperatureMax ? 'Normal' : 'Outside Range'}
                     </span>
                   </td>
                 </tr>
                 <tr>
                   <td className="py-2 text-slate-700">Hydration</td>
-                  <td className="py-2 text-slate-700">{baseline.avgHydration}%</td>
-                  <td className="py-2 text-slate-700">{current?.hydration || '--'}%</td>
+                  <td className="py-2 text-slate-700">{baseline.hydrationMin}-{baseline.hydrationMax}%</td>
+                  <td className="py-2 text-slate-700">{current ? Math.round(current.hydration) : '--'}%</td>
                   <td className="py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      current && current.hydration >= 60 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      current && current.hydration >= baseline.hydrationMin ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {current && current.hydration >= 60 ? 'Good' : 'Low'}
+                      {current && current.hydration >= baseline.hydrationMin ? 'Good' : 'Low'}
                     </span>
                   </td>
                 </tr>

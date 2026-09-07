@@ -289,7 +289,7 @@ router.get('/patients/:id/analytics', async (req: AuthRequest, res: Response) =>
       ? vitals.reduce((sum, v) => sum + v.spo2, 0) / vitals.length
       : 0;
     const avgTemp = vitals.length > 0
-      ? vitals.reduce((sum, v) => sum + v.temperature, 0) / vitals.length
+      ? vitals.reduce((sum, v) => sum + v.bodyTemperature, 0) / vitals.length
       : 0;
     const avgHydration = vitals.length > 0
       ? vitals.reduce((sum, v) => sum + v.hydration, 0) / vitals.length
@@ -313,7 +313,7 @@ router.get('/patients/:id/analytics', async (req: AuthRequest, res: Response) =>
       date,
       avgHeartRate: readings.reduce((s, r) => s + r.heartRate, 0) / readings.length,
       avgSpo2: readings.reduce((s, r) => s + r.spo2, 0) / readings.length,
-      avgTemp: readings.reduce((s, r) => s + r.temperature, 0) / readings.length,
+      avgTemp: readings.reduce((s, r) => s + r.bodyTemperature, 0) / readings.length,
       avgHydration: readings.reduce((s, r) => s + r.hydration, 0) / readings.length,
       readingCount: readings.length
     }));

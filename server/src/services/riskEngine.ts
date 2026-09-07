@@ -77,15 +77,19 @@ function calculateDehydration(input: RiskInput): { score: number; factors: strin
   const bl = input.baseline;
 
   const hydMin = bl?.hydrationMin ?? 55;
-  if (input.hydration < hydMin - 20) { score += 40; factors.push('severe dehydration'); }
-  else if (input.hydration < hydMin - 10) { score += 25; factors.push('moderate dehydration'); }
-  else if (input.hydration < hydMin) { score += 10; factors.push('mild dehydration'); }
+  if (input.hydration < hydMin - 25) { score += 50; factors.push('severe dehydration'); }
+  else if (input.hydration < hydMin - 15) { score += 40; factors.push('moderate dehydration'); }
+  else if (input.hydration < hydMin - 5) { score += 20; factors.push('mild dehydration'); }
+  else if (input.hydration < hydMin) { score += 10; factors.push('slightly below baseline hydration'); }
 
-  if (input.hydration < 35) { score += 20; factors.push('critically low hydration'); }
+  if (input.hydration < 35) { score += 25; factors.push('critically low hydration'); }
+  else if (input.hydration < 45) { score += 10; factors.push('low hydration level'); }
 
   const hrMax = bl?.heartRateMax ?? 85;
   if (input.heartRate > hrMax + 15 && input.hydration < 50) {
     score += 15; factors.push('elevated heart rate with low hydration');
+  } else if (input.heartRate > hrMax + 10 && input.hydration < 55) {
+    score += 8; factors.push('mildly elevated heart rate with dehydration');
   }
 
   const tempMax = bl?.temperatureMax ?? 37.2;
@@ -102,9 +106,9 @@ function calculateRespiratory(input: RiskInput): { score: number; factors: strin
   const bl = input.baseline;
 
   if (input.aqi !== undefined) {
-    if (input.aqi > 200) { score += 40; factors.push('very unhealthy air quality'); }
-    else if (input.aqi > 150) { score += 30; factors.push('unhealthy air quality'); }
-    else if (input.aqi > 100) { score += 20; factors.push('unhealthy for sensitive groups'); }
+    if (input.aqi > 200) { score += 35; factors.push('very unhealthy air quality'); }
+    else if (input.aqi > 150) { score += 28; factors.push('unhealthy air quality'); }
+    else if (input.aqi > 100) { score += 18; factors.push('unhealthy for sensitive groups'); }
     else if (input.aqi > 50) { score += 5; factors.push('moderate air quality'); }
   }
 
@@ -114,7 +118,11 @@ function calculateRespiratory(input: RiskInput): { score: number; factors: strin
   else if (input.spo2 < spo2Min) { score += 10; factors.push('below baseline SpO2'); }
 
   if (input.aqi !== undefined && input.aqi > 100 && input.spo2 < 95) {
-    score += 15; factors.push('poor air quality with reduced oxygen saturation');
+    score += 12; factors.push('poor air quality with reduced oxygen saturation');
+  }
+
+  if (input.heartRate > 80 && input.aqi !== undefined && input.aqi > 150) {
+    score += 10; factors.push('elevated heart rate due to respiratory distress');
   }
 
   return { score: clamp(score, 0, 100), factors };
@@ -150,21 +158,22 @@ function calculateFatigue(input: RiskInput): { score: number; factors: string[] 
 
   const sleepMin = bl?.sleepMin ?? 6;
   if (input.sleep !== undefined) {
-    if (input.sleep < 4) { score += 35; factors.push('severe sleep deprivation'); }
-    else if (input.sleep < sleepMin) { score += 20; factors.push('insufficient sleep'); }
+    if (input.sleep < 3) { score += 25; factors.push('severe sleep deprivation'); }
+    else if (input.sleep < 4) { score += 15; factors.push('poor sleep quality'); }
+    else if (input.sleep < sleepMin) { score += 10; factors.push('insufficient sleep'); }
   }
 
   if (input.hrv !== undefined) {
-    if (input.hrv < 25) { score += 20; factors.push('low HRV indicating fatigue'); }
-    else if (input.hrv < 35) { score += 10; factors.push('moderately low HRV'); }
+    if (input.hrv < 25) { score += 15; factors.push('low HRV indicating fatigue'); }
+    else if (input.hrv < 35) { score += 8; factors.push('moderately low HRV'); }
   }
 
   if (input.activity !== undefined && input.activity < 10) {
     score += 10; factors.push('very low activity level');
   }
 
-  if (input.sleep !== undefined && input.sleep < 5 && input.hrv !== undefined && input.hrv < 30) {
-    score += 15; factors.push('combined poor sleep and low HRV');
+  if (input.sleep !== undefined && input.sleep < 5 && input.hrv !== undefined && input.hrv < 35) {
+    score += 12; factors.push('combined poor sleep and low HRV');
   }
 
   return { score: clamp(score, 0, 100), factors };

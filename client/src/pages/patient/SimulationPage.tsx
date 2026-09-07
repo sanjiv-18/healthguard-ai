@@ -1,39 +1,78 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { simulationAPI } from '../../services/api';
 import { SimulationCard } from '../../components/SimulationCard';
 import { RiskBadge } from '../../components/RiskBadge';
 import { AlertCard } from '../../components/AlertCard';
 import { FallDetectionModal } from '../../components/FallDetectionModal';
 import { EmergencyModal } from '../../components/EmergencyModal';
-import { Thermometer, Droplets, Wind, Heart, Moon, Layers, Siren, RotateCcw, CheckCircle } from 'lucide-react';
+import { Thermometer, Droplets, Wind, Heart, Moon, Layers, Siren, RotateCcw, CheckCircle, Activity, AlertTriangle, Wifi, WifiOff, Zap } from 'lucide-react';
+import { formatSleepDuration, formatSteps } from '../../types';
+import type { SimulationResult } from '../../types';
 
 const scenarios = [
-  { type: 'normal', title: 'Normal Vitals', description: 'Simulate healthy baseline readings', icon: <CheckCircle className="w-5 h-5 text-green-600" />, color: 'green' },
-  { type: 'heat-stress', title: 'Heat Stress', description: 'High temperature and heat index exposure', icon: <Thermometer className="w-5 h-5 text-orange-600" />, color: 'orange' },
+  { type: 'normal', title: 'Normal Vitals', description: 'Healthy baseline readings', icon: <CheckCircle className="w-5 h-5 text-green-600" />, color: 'green' },
+  { type: 'exercise', title: 'Exercise', description: 'Physical activity simulation', icon: <Activity className="w-5 h-5 text-blue-600" />, color: 'blue' },
+  { type: 'heat-stress', title: 'Heat Stress', description: 'High temperature exposure', icon: <Thermometer className="w-5 h-5 text-orange-600" />, color: 'orange' },
+  { type: 'heart-rate', title: 'High Heart Rate', description: 'Elevated cardiac activity', icon: <Heart className="w-5 h-5 text-red-600" />, color: 'red' },
+  { type: 'low-spo2', title: 'Low SpO2', description: 'Reduced oxygen saturation', icon: <Wind className="w-5 h-5 text-purple-600" />, color: 'purple' },
   { type: 'dehydration', title: 'Dehydration', description: 'Low hydration levels', icon: <Droplets className="w-5 h-5 text-blue-600" />, color: 'blue' },
-  { type: 'high-aqi', title: 'High AQI', description: 'Poor air quality conditions', icon: <Wind className="w-5 h-5 text-purple-600" />, color: 'purple' },
-  { type: 'heart-rate', title: 'Heart Rate Spike', description: 'Elevated heart rate simulation', icon: <Heart className="w-5 h-5 text-red-600" />, color: 'red' },
   { type: 'poor-sleep', title: 'Poor Sleep', description: 'Sleep deprivation scenario', icon: <Moon className="w-5 h-5 text-indigo-600" />, color: 'slate' },
-  { type: 'combined-risk', title: 'Combined Risk', description: 'Multiple risk factors at once', icon: <Layers className="w-5 h-5 text-amber-600" />, color: 'amber' },
+  { type: 'combined-risk', title: 'Combined Risk', description: 'Multiple risk factors', icon: <Layers className="w-5 h-5 text-amber-600" />, color: 'amber' },
   { type: 'fall', title: 'Fall Detection', description: 'Simulate a fall event', icon: <Siren className="w-5 h-5 text-red-600" />, color: 'red' },
+  { type: 'device-disconnect', title: 'Device Disconnect', description: 'Simulate device going offline', icon: <WifiOff className="w-5 h-5 text-slate-600" />, color: 'slate' },
+  { type: 'device-reconnect', title: 'Device Reconnect', description: 'Resume device telemetry', icon: <Wifi className="w-5 h-5 text-green-600" />, color: 'green' },
+  { type: 'reset', title: 'Reset All', description: 'Reset to initial state', icon: <RotateCcw className="w-5 h-5 text-slate-600" />, color: 'slate' },
 ];
 
 export function SimulationPage() {
-  const [result, setResult] = useState<any>(null);
+  const queryClient = useQueryClient();
+  const [result, setResult] = useState<SimulationResult | null>(null);
   const [showFallModal, setShowFallModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
+  const [eventLog, setEventLog] = useState<string[]>([]);
+
+  const { data: simStatus } = useQuery({
+    queryKey: ['simulation-status'],
+    queryFn: () => simulationAPI.getStatus().then(r => r.data.events),
+  });
 
   const triggerMutation = useMutation({
     mutationFn: (scenarioType: string) => simulationAPI.trigger(scenarioType),
     onSuccess: (data) => {
       setResult(data.data);
+      queryClient.invalidateQueries({ queryKey: ['health-current'] });
+      queryClient.invalidateQueries({ queryKey: ['health-score'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-risk'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['environment-current'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+
+      const timestamp = new Date().toLocaleTimeString();
+      setEventLog(prev => [
+        `${timestamp} SCENARIO_TRIGGERED: ${data.data.scenario}`,
+        `${timestamp} HEALTH_READING_RECEIVED: HR=${data.data.vitalReading.heartRate} bpm`,
+        `${timestamp} HEALTH_SCORE_UPDATED: ${data.data.healthScore?.score ?? 'N/A'}`,
+        `${timestamp} AI_RISK_RECALCULATED: ${data.data.riskAssessment.level}`,
+        ...(data.data.alert ? [`${timestamp} ALERT_CREATED: ${data.data.alert.level}`] : []),
+        `${timestamp} NOTIFICATION_CREATED`,
+        ...prev,
+      ].slice(0, 20));
     },
   });
 
   const resetMutation = useMutation({
     mutationFn: () => simulationAPI.reset(),
-    onSuccess: () => setResult(null),
+    onSuccess: (data) => {
+      setResult(data.data);
+      queryClient.invalidateQueries({ queryKey: ['health-current'] });
+      queryClient.invalidateQueries({ queryKey: ['health-score'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-risk'] });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['environment-current'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setEventLog([]);
+    },
   });
 
   const handleTrigger = (type: string) => {
@@ -48,25 +87,24 @@ export function SimulationPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Simulation Center</h2>
-          <p className="text-slate-500">Test the system with simulated health scenarios</p>
+          <p className="text-slate-500">Test HealthGuard's health intelligence with controlled scenarios</p>
         </div>
-        <button
-          onClick={() => resetMutation.mutate()}
-          disabled={resetMutation.isPending}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reset
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+            DEMO / SIMULATION MODE
+          </span>
+          <button
+            onClick={() => resetMutation.mutate()}
+            disabled={resetMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Reset
+          </button>
+        </div>
       </div>
 
-      {/* Architecture Note */}
-      <div className="bg-slate-100 rounded-xl p-4 text-sm text-slate-600">
-        <strong>Architecture:</strong> Frontend → API → Backend → Database → Risk Engine → Alert → Response
-      </div>
-
-      {/* Scenario Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {scenarios.map((scenario) => (
           <SimulationCard
             key={scenario.type}
@@ -80,64 +118,94 @@ export function SimulationPage() {
         ))}
       </div>
 
-      {/* Results */}
       {result && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">Simulation Results</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Simulation Results - {result.scenario}</h3>
 
-          {/* New Vitals */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
-            <h4 className="font-semibold text-slate-900 mb-3">New Vital Readings</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <h4 className="font-semibold text-slate-900 mb-3">Vital Signs</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
               <div className="text-center p-3 bg-red-50 rounded-xl">
                 <p className="text-xs text-red-600">Heart Rate</p>
-                <p className="text-xl font-bold text-slate-900">{result.vitalReading?.heartRate} bpm</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(result.vitalReading.heartRate)} <span className="text-sm font-normal">bpm</span></p>
               </div>
               <div className="text-center p-3 bg-blue-50 rounded-xl">
-                <p className="text-xs text-blue-600">SpO2</p>
-                <p className="text-xl font-bold text-slate-900">{result.vitalReading?.spo2}%</p>
+                <p className="text-xs text-blue-600">Blood Oxygen</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(result.vitalReading.spo2)}%</p>
               </div>
               <div className="text-center p-3 bg-amber-50 rounded-xl">
-                <p className="text-xs text-amber-600">Temperature</p>
-                <p className="text-xl font-bold text-slate-900">{result.vitalReading?.temperature}°C</p>
+                <p className="text-xs text-amber-600">Body Temperature</p>
+                <p className="text-xl font-bold text-slate-900">{result.vitalReading.bodyTemperature.toFixed(1)}°C</p>
               </div>
               <div className="text-center p-3 bg-teal-50 rounded-xl">
                 <p className="text-xs text-teal-600">Hydration</p>
-                <p className="text-xl font-bold text-slate-900">{result.vitalReading?.hydration}%</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(result.vitalReading.hydration)}%</p>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-xl">
+                <p className="text-xs text-purple-600">Sleep</p>
+                <p className="text-xl font-bold text-slate-900">{formatSleepDuration(result.vitalReading.sleepMinutes || 0)}</p>
+              </div>
+              <div className="text-center p-3 bg-green-50 rounded-xl">
+                <p className="text-xs text-green-600">Steps</p>
+                <p className="text-xl font-bold text-slate-900">{formatSteps(result.vitalReading.steps)}</p>
+              </div>
+              <div className="text-center p-3 bg-indigo-50 rounded-xl">
+                <p className="text-xs text-indigo-600">Stress</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(result.vitalReading.stressPercent || 0)}%</p>
+              </div>
+              <div className="text-center p-3 bg-cyan-50 rounded-xl">
+                <p className="text-xs text-cyan-600">Respiratory Rate</p>
+                <p className="text-xl font-bold text-slate-900">{Math.round(result.vitalReading.respiratoryRate || 0)} <span className="text-sm font-normal">/min</span></p>
               </div>
             </div>
           </div>
 
-          {/* Environment */}
           {result.envReading && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <h4 className="font-semibold text-slate-900 mb-3">Environmental Conditions</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="text-center p-3 bg-orange-50 rounded-xl">
-                  <p className="text-xs text-orange-600">Temperature</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading?.temperature}°C</p>
+                  <p className="text-xs text-orange-600">Env Temperature</p>
+                  <p className="text-xl font-bold text-slate-900">{result.envReading.environmentalTemperature.toFixed(1)}°C</p>
                 </div>
                 <div className="text-center p-3 bg-blue-50 rounded-xl">
                   <p className="text-xs text-blue-600">Humidity</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading?.humidity}%</p>
+                  <p className="text-xl font-bold text-slate-900">{Math.round(result.envReading.humidity)}%</p>
                 </div>
                 <div className="text-center p-3 bg-purple-50 rounded-xl">
                   <p className="text-xs text-purple-600">AQI</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading?.aqi}</p>
+                  <p className="text-xl font-bold text-slate-900">{Math.round(result.envReading.aqi)}</p>
                 </div>
                 <div className="text-center p-3 bg-amber-50 rounded-xl">
                   <p className="text-xs text-amber-600">Heat Index</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading?.heatIndex}°C</p>
+                  <p className="text-xl font-bold text-slate-900">{result.envReading.heatIndex.toFixed(1)}°C</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Risk Assessment */}
+          {result.healthScore && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6">
+              <h4 className="font-semibold text-slate-900 mb-3">Health Score</h4>
+              <div className="flex items-center gap-4 mb-3">
+                <span className="text-4xl font-bold text-slate-900">{result.healthScore.score}</span>
+                <RiskBadge level={result.healthScore.riskLevel} size="lg" />
+                <span className="text-sm text-slate-500">Data Quality: {result.healthScore.dataQuality}</span>
+              </div>
+              {result.healthScore.reasons && result.healthScore.reasons.length > 0 && (
+                <div className="space-y-1">
+                  {result.healthScore.reasons.map((reason: string, i: number) => (
+                    <p key={i} className="text-sm text-slate-600">- {reason}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {result.riskAssessment && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <div className="flex items-center gap-3 mb-3">
-                <h4 className="font-semibold text-slate-900">Risk Assessment</h4>
+                <h4 className="font-semibold text-slate-900">AI Risk Assessment</h4>
                 <RiskBadge level={result.riskAssessment.level} />
                 <span className="text-sm text-slate-500">Score: {result.riskAssessment.overallRisk}</span>
               </div>
@@ -162,7 +230,6 @@ export function SimulationPage() {
             </div>
           )}
 
-          {/* Recommendations */}
           {result.recommendations && result.recommendations.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <h4 className="font-semibold text-slate-900 mb-3">Recommendations</h4>
@@ -180,7 +247,6 @@ export function SimulationPage() {
             </div>
           )}
 
-          {/* Alert */}
           {result.alert && (
             <div className="space-y-3">
               <h4 className="font-semibold text-slate-900">Generated Alert</h4>
@@ -190,7 +256,27 @@ export function SimulationPage() {
         </div>
       )}
 
-      {/* Modals */}
+      {eventLog.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h4 className="font-semibold text-slate-900 mb-3">Simulation Event Log</h4>
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {eventLog.map((event, i) => (
+              <p key={i} className="text-xs font-mono text-slate-600 bg-slate-50 p-2 rounded">{event}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Not a medical diagnosis</p>
+            <p className="text-xs text-amber-700 mt-1">This application is for demonstration purposes only. Health scores and risk assessments are generated by an AI engine and should not be used for medical decisions.</p>
+          </div>
+        </div>
+      </div>
+
       <FallDetectionModal
         isOpen={showFallModal}
         onClose={() => setShowFallModal(false)}

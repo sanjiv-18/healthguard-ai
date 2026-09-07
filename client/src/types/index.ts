@@ -35,37 +35,67 @@ export interface VitalReading {
   id?: string;
   heartRate: number;
   spo2: number;
-  temperature: number;
+  bodyTemperature: number;
   hydration: number;
   hrv?: number;
-  sleep?: number;
-  activity?: number;
+  sleepMinutes?: number;
+  steps: number;
+  stressPercent?: number;
+  respiratoryRate?: number;
+  calories?: number;
   timestamp: string;
   source: string;
+  deviceId?: string;
 }
 
 export interface EnvironmentReading {
   id?: string;
-  temperature: number;
+  environmentalTemperature: number;
   humidity: number;
   aqi: number;
   uvIndex: number;
   heatIndex: number;
   windSpeed?: number;
+  weatherCondition?: string;
   timestamp: string;
 }
 
 export interface HealthBaseline {
   id: string;
   userId: string;
-  avgHeartRate: number;
-  avgSpo2: number;
-  avgTemperature: number;
-  avgHydration: number;
-  avgHrv?: number;
-  avgSleep?: number;
-  avgActivity?: number;
+  heartRateMin: number;
+  heartRateMax: number;
+  spo2Min: number;
+  temperatureMin: number;
+  temperatureMax: number;
+  hydrationMin: number;
+  hydrationMax: number;
+  hrvMin: number;
+  hrvMax: number;
+  sleepMinMinutes: number;
+  sleepMaxMinutes: number;
+  stepsMin: number;
+  stepsMax: number;
   calculatedAt: string;
+}
+
+export interface HealthScore {
+  score: number;
+  riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  components: {
+    heartRate: number;
+    spo2: number;
+    temperature: number;
+    hydration: number;
+    sleep: number;
+    activity: number;
+    stress: number;
+    respiratory: number;
+    environment: number;
+  };
+  reasons: string[];
+  dataQuality: 'GOOD' | 'LIMITED' | 'STALE';
+  timestamp?: string;
 }
 
 export interface RiskAssessment {
@@ -106,9 +136,15 @@ export interface Device {
   id: string;
   name: string;
   type: string;
-  status: 'connected' | 'disconnected' | 'syncing';
+  manufacturer?: string;
+  model?: string;
+  provider: string;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'SYNCING' | 'ERROR';
+  battery: number;
   lastSync?: string;
-  isSimulation?: boolean;
+  connectedAt?: string;
+  disconnectedAt?: string;
+  isSimulation: boolean;
 }
 
 export interface EmergencyContact {
@@ -177,4 +213,32 @@ export interface SystemEvent {
   type: string;
   message: string;
   timestamp: string;
+}
+
+export interface SimulationResult {
+  scenario: string;
+  vitalReading: VitalReading;
+  envReading?: EnvironmentReading;
+  riskAssessment: RiskAssessment;
+  healthScore: HealthScore;
+  alert: Alert | null;
+  notification: Notification;
+  recommendations: any[];
+  systemEvent: SystemEvent;
+  emergencyEvent?: EmergencyEvent;
+  message?: string;
+}
+
+export function formatSleepDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}h ${m.toString().padStart(2, '0')}m`;
+}
+
+export function formatSteps(steps: number): string {
+  return steps.toLocaleString();
+}
+
+export function formatTemperature(temp: number): string {
+  return `${temp.toFixed(1)}°C`;
 }

@@ -5,6 +5,7 @@ import type {
   EnvironmentReading,
   RiskAssessment,
   HealthBaseline,
+  HealthScore,
   Alert,
   Notification,
   Device,
@@ -12,6 +13,7 @@ import type {
   DoctorAccess,
   AccessAuditLog,
   ClinicalNote,
+  SimulationResult,
 } from '../types';
 
 const api = axios.create({
@@ -51,6 +53,7 @@ export const healthAPI = {
     api.get<{ readings: VitalReading[] }>('/health/history', { params }),
   createReading: (data: Partial<VitalReading>) =>
     api.post<{ reading: VitalReading }>('/health/readings', data),
+  getHealthScore: () => api.get<{ healthScore: HealthScore }>('/health/health-score'),
 };
 
 export const environmentAPI = {
@@ -83,10 +86,21 @@ export const notificationsAPI = {
 
 export const devicesAPI = {
   getAll: () => api.get<{ devices: Device[] }>('/devices'),
-  create: (data: { name: string; type: string }) =>
+  getStatus: () => api.get<{ total: number; connected: number; disconnected: number; syncing: number; devices: any[] }>('/devices/status'),
+  create: (data: { name: string; type: string; manufacturer?: string; model?: string; provider?: string; isSimulation?: boolean }) =>
     api.post<{ device: Device }>('/devices', data),
-  addReadings: (id: string, data: Partial<VitalReading>[]) =>
-    api.post<{ message: string }>(`/devices/${id}/readings`, { readings: data }),
+  getOne: (id: string) => api.get<{ device: Device }>(`/devices/${id}`),
+  update: (id: string, data: { name?: string; type?: string; manufacturer?: string; model?: string }) =>
+    api.patch<{ device: Device }>(`/devices/${id}`, data),
+  remove: (id: string) => api.delete(`/devices/${id}`),
+  connect: (id: string) => api.post<{ device: Device }>(`/devices/${id}/connect`),
+  disconnect: (id: string) => api.post<{ device: Device }>(`/devices/${id}/disconnect`),
+  sync: (id: string) => api.post<{ device: Device }>(`/devices/${id}/sync`),
+  addReadings: (id: string, data: Partial<VitalReading>) =>
+    api.post<{ reading: VitalReading; healthScore: HealthScore }>(`/devices/${id}/readings`, data),
+  getReadings: (id: string, params?: { limit?: number }) =>
+    api.get<{ readings: VitalReading[] }>(`/devices/${id}/readings`, { params }),
+  getEvents: (id: string) => api.get<{ events: any[] }>(`/devices/${id}/events`),
 };
 
 export const emergencyAPI = {
@@ -127,17 +141,9 @@ export const privacyAPI = {
 
 export const simulationAPI = {
   trigger: (scenarioType: string) =>
-    api.post<{ 
-      scenario: string;
-      vitalReading: VitalReading;
-      envReading?: EnvironmentReading;
-      riskAssessment: RiskAssessment;
-      alert: Alert | null;
-      notification: Notification;
-      recommendations: any[];
-      systemEvent: any;
-    }>(`/simulation/${scenarioType}`),
-  reset: () => api.post<{ message: string; vitals: any; risk: any }>('/simulation/reset'),
+    api.post<SimulationResult>(`/simulation/${scenarioType}`),
+  reset: () => api.post<SimulationResult>('/simulation/reset'),
+  getStatus: () => api.get<{ events: any[] }>('/simulation/status'),
 };
 
 export default api;
