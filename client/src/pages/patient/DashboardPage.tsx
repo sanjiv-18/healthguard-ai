@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { healthAPI, aiAPI, alertsAPI, environmentAPI } from '../../services/api';
+import { healthAPI, aiAPI, alertsAPI, environmentAPI, devicesAPI } from '../../services/api';
 import { MetricCard } from '../../components/MetricCard';
 import { RiskBadge } from '../../components/RiskBadge';
 import { AlertCard } from '../../components/AlertCard';
 import { HealthScoreGauge } from '../../components/HealthScoreGauge';
+import { SmartWatchSVG } from '../../components/SmartWatchSVG';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
-import { Heart, Thermometer, Droplets, Moon, Activity, Wind, CloudSun, AlertTriangle, Play, Share2, Footprints, Brain } from 'lucide-react';
+import { Heart, Thermometer, Droplets, Moon, Activity, Wind, CloudSun, AlertTriangle, Play, Share2, Footprints, Brain, Clock, WifiOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatSleepDuration, formatSteps } from '../../types';
 
@@ -39,6 +40,15 @@ export function DashboardPage() {
     queryKey: ['environment-current'],
     queryFn: () => environmentAPI.getCurrent().then(r => r.data.reading),
   });
+
+  const { data: devices } = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => devicesAPI.getAll().then(r => r.data.devices),
+    refetchInterval: 10000,
+  });
+
+  const primaryDevice = devices?.[0];
+  const isDeviceConnected = primaryDevice?.status === 'CONNECTED';
 
   const healthScore = healthScoreData?.score ?? 0;
   const riskLevel = healthScoreData?.riskLevel ?? 'LOW';
@@ -183,22 +193,59 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Recent Alerts</h3>
-          <button onClick={() => navigate('/patient/alerts')} className="text-sm text-teal-600 hover:text-teal-700 font-medium">
-            View All
-          </button>
+      {/* Wearable Status + Recent Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Wearable Device Status */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Wearable</h3>
+          {primaryDevice ? (
+            <div className="flex items-center gap-4">
+              <SmartWatchSVG connected={isDeviceConnected} syncing={primaryDevice.status === 'SYNCING'} className="w-20 h-28 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="font-semibold text-slate-900">{primaryDevice.name}</h4>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`w-2 h-2 rounded-full ${isDeviceConnected ? 'bg-green-500' : 'bg-slate-400'}`} />
+                  <span className={`text-sm font-medium ${isDeviceConnected ? 'text-green-600' : 'text-slate-500'}`}>
+                    {isDeviceConnected ? 'Connected' : primaryDevice.status === 'SYNCING' ? 'Syncing...' : 'Not Connected'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {formatTimeSince(primaryDevice.lastSync)}
+                  </span>
+                </div>
+                {!isDeviceConnected && (
+                  <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                    <WifiOff className="w-3 h-3" />
+                    Device is offline. Data may be stale.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">No wearable device connected</p>
+          )}
         </div>
-        {activeAlerts.length > 0 ? (
-          <div className="space-y-3">
-            {activeAlerts.slice(0, 3).map(alert => (
-              <AlertCard key={alert.id} alert={alert} />
-            ))}
+
+        {/* Recent Alerts */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900">Recent Alerts</h3>
+            <button onClick={() => navigate('/patient/alerts')} className="text-sm text-teal-600 hover:text-teal-700 font-medium">
+              View All
+            </button>
           </div>
-        ) : (
-          <p className="text-slate-500 text-sm">No active alerts</p>
-        )}
+          {activeAlerts.length > 0 ? (
+            <div className="space-y-3">
+              {activeAlerts.slice(0, 3).map(alert => (
+                <AlertCard key={alert.id} alert={alert} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">No active alerts</p>
+          )}
+        </div>
       </div>
     </div>
   );
