@@ -70,8 +70,8 @@ export function HealthHistoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`font-medium ${reading.temperature > 37.5 ? 'text-amber-600' : 'text-slate-900'}`}>
-                        {reading.temperature}
+                      <span className={`font-medium ${reading.bodyTemperature > 37.5 ? 'text-amber-600' : 'text-slate-900'}`}>
+                        {reading.bodyTemperature}
                       </span>
                     </td>
                     <td className="px-4 py-3">

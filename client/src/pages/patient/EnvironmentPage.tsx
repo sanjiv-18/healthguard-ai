@@ -17,7 +17,7 @@ export function EnvironmentPage() {
   });
 
   const tempData = useMemo(() =>
-    (history || []).map(r => ({ timestamp: r.timestamp, value: r.temperature })).reverse(),
+    (history || []).map(r => ({ timestamp: r.timestamp, value: r.environmentalTemperature })).reverse(),
     [history]
   );
   const humidityData = useMemo(() =>
@@ -59,7 +59,7 @@ export function EnvironmentPage() {
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
               <Thermometer className="w-6 h-6 text-amber-500 mx-auto mb-2" />
               <p className="text-xs text-slate-500 mb-1">Temperature</p>
-              <p className="text-2xl font-bold text-slate-900">{current.temperature}°C</p>
+              <p className="text-2xl font-bold text-slate-900">{current.environmentalTemperature}°C</p>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
               <Droplets className="w-6 h-6 text-blue-500 mx-auto mb-2" />

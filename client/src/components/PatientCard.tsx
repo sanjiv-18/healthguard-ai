@@ -42,7 +42,7 @@ export function PatientCard({ patient, onClick }: PatientCardProps) {
           </div>
           <div className="text-center">
             <p className="text-slate-500">Temp</p>
-            <p className="font-medium">{patient.latestVitals.temperature}°C</p>
+            <p className="font-medium">{patient.latestVitals.bodyTemperature}°C</p>
           </div>
         </div>
       )}

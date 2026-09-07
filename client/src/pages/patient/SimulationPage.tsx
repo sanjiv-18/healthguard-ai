@@ -51,9 +51,9 @@ export function SimulationPage() {
       const timestamp = new Date().toLocaleTimeString();
       setEventLog(prev => [
         `${timestamp} SCENARIO_TRIGGERED: ${data.data.scenario}`,
-        `${timestamp} HEALTH_READING_RECEIVED: HR=${data.data.vitalReading.heartRate} bpm`,
+        ...(data.data.vitalReading ? [`${timestamp} HEALTH_READING_RECEIVED: HR=${data.data.vitalReading.heartRate} bpm`] : []),
         `${timestamp} HEALTH_SCORE_UPDATED: ${data.data.healthScore?.score ?? 'N/A'}`,
-        `${timestamp} AI_RISK_RECALCULATED: ${data.data.riskAssessment.level}`,
+        ...(data.data.riskAssessment ? [`${timestamp} AI_RISK_RECALCULATED: ${data.data.riskAssessment.level}`] : []),
         ...(data.data.alert ? [`${timestamp} ALERT_CREATED: ${data.data.alert.level}`] : []),
         `${timestamp} NOTIFICATION_CREATED`,
         ...prev,
@@ -122,6 +122,11 @@ export function SimulationPage() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-900">Simulation Results - {result.scenario}</h3>
 
+          {result.message && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">{result.message}</div>
+          )}
+
+          {result.vitalReading && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
             <h4 className="font-semibold text-slate-900 mb-3">Vital Signs</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -135,7 +140,7 @@ export function SimulationPage() {
               </div>
               <div className="text-center p-3 bg-amber-50 rounded-xl">
                 <p className="text-xs text-amber-600">Body Temperature</p>
-                <p className="text-xl font-bold text-slate-900">{result.vitalReading.bodyTemperature.toFixed(1)}°C</p>
+                <p className="text-xl font-bold text-slate-900">{result.vitalReading.bodyTemperature?.toFixed(1) ?? '--'}°C</p>
               </div>
               <div className="text-center p-3 bg-teal-50 rounded-xl">
                 <p className="text-xs text-teal-600">Hydration</p>
@@ -159,6 +164,7 @@ export function SimulationPage() {
               </div>
             </div>
           </div>
+          )}
 
           {result.envReading && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -166,7 +172,7 @@ export function SimulationPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="text-center p-3 bg-orange-50 rounded-xl">
                   <p className="text-xs text-orange-600">Env Temperature</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading.environmentalTemperature.toFixed(1)}°C</p>
+                  <p className="text-xl font-bold text-slate-900">{result.envReading.environmentalTemperature?.toFixed(1) ?? '--'}°C</p>
                 </div>
                 <div className="text-center p-3 bg-blue-50 rounded-xl">
                   <p className="text-xs text-blue-600">Humidity</p>
@@ -178,7 +184,7 @@ export function SimulationPage() {
                 </div>
                 <div className="text-center p-3 bg-amber-50 rounded-xl">
                   <p className="text-xs text-amber-600">Heat Index</p>
-                  <p className="text-xl font-bold text-slate-900">{result.envReading.heatIndex.toFixed(1)}°C</p>
+                  <p className="text-xl font-bold text-slate-900">{result.envReading.heatIndex?.toFixed(1) ?? '--'}°C</p>
                 </div>
               </div>
             </div>
@@ -192,7 +198,7 @@ export function SimulationPage() {
                 <RiskBadge level={result.healthScore.riskLevel} size="lg" />
                 <span className="text-sm text-slate-500">Data Quality: {result.healthScore.dataQuality}</span>
               </div>
-              {result.healthScore.reasons && result.healthScore.reasons.length > 0 && (
+              {result.healthScore.reasons && Array.isArray(result.healthScore.reasons) && result.healthScore.reasons.length > 0 && (
                 <div className="space-y-1">
                   {result.healthScore.reasons.map((reason: string, i: number) => (
                     <p key={i} className="text-sm text-slate-600">- {reason}</p>
@@ -230,7 +236,7 @@ export function SimulationPage() {
             </div>
           )}
 
-          {result.recommendations && result.recommendations.length > 0 && (
+          {result.recommendations && Array.isArray(result.recommendations) && result.recommendations.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <h4 className="font-semibold text-slate-900 mb-3">Recommendations</h4>
               <div className="space-y-2">
@@ -250,7 +256,7 @@ export function SimulationPage() {
           {result.alert && (
             <div className="space-y-3">
               <h4 className="font-semibold text-slate-900">Generated Alert</h4>
-              <AlertCard alert={result.alert} />
+              <AlertCard alert={{...result.alert, status: result.alert.status?.toLowerCase() || 'active', factors: Array.isArray(result.alert.factors) ? result.alert.factors : []}} />
             </div>
           )}
         </div>

@@ -34,10 +34,10 @@ export function AnalyticsPage() {
     return {
       hr: reversed.map(v => ({ timestamp: v.timestamp, value: v.heartRate })),
       spo2: reversed.map(v => ({ timestamp: v.timestamp, value: v.spo2 })),
-      temp: reversed.map(v => ({ timestamp: v.timestamp, value: v.temperature })),
+      temp: reversed.map(v => ({ timestamp: v.timestamp, value: v.bodyTemperature })),
       hydration: reversed.map(v => ({ timestamp: v.timestamp, value: v.hydration })),
-      sleep: reversed.map(v => ({ timestamp: v.timestamp, value: v.sleep || 7 })),
-      activity: reversed.map(v => ({ timestamp: v.timestamp, value: v.activity || 8000 })),
+      sleep: reversed.map(v => ({ timestamp: v.timestamp, value: (v.sleepMinutes || 480) / 60 })),
+      activity: reversed.map(v => ({ timestamp: v.timestamp, value: v.steps || 8000 })),
     };
   }, [vitals]);
 

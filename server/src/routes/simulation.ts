@@ -180,7 +180,10 @@ async function processSimulation(req: AuthRequest, simulationType: string, data:
       ...healthScore,
       reasons: JSON.parse(healthScore.reasons),
     },
-    alert,
+    alert: alert ? {
+      ...alert,
+      factors: JSON.parse(alert.factors),
+    } : null,
     notification,
     recommendations: recs,
     systemEvent,
@@ -326,6 +329,14 @@ router.post('/device-disconnect', async (req: AuthRequest, res: Response) => {
 
     res.json({
       scenario: 'Device Disconnect',
+      vitalReading: null,
+      envReading: null,
+      riskAssessment: null,
+      healthScore: null,
+      alert: null,
+      notification: null,
+      recommendations: [],
+      systemEvent: null,
       device: device ? { ...device, status: 'DISCONNECTED' } : null,
       message: 'Device disconnected. Last known data preserved.',
     });

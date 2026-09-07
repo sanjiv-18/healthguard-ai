@@ -119,7 +119,7 @@ export function DoctorPatientDetailPage() {
                 <div className="text-center p-3 bg-amber-50 rounded-xl">
                   <Thermometer className="w-5 h-5 text-amber-500 mx-auto mb-1" />
                   <p className="text-xs text-slate-500">Temperature</p>
-                  <p className="text-xl font-bold">{vitals[0].temperature}°C</p>
+                  <p className="text-xl font-bold">{vitals[0].bodyTemperature}°C</p>
                 </div>
                 <div className="text-center p-3 bg-teal-50 rounded-xl">
                   <Droplets className="w-5 h-5 text-teal-500 mx-auto mb-1" />
